@@ -32,5 +32,18 @@ App::uses('Controller', 'Controller');
  * @link http://book.cakephp.org/2.0/en/controllers.html#the-app-controller
  */
 class AppController extends Controller {
-  public $components = array('DebugKit.Toolbar');
+  public $components = array(
+    'DebugKit.Toolbar',
+    'Session',
+    'Auth' => array(
+      'loginRedirect'  => array('controller' => 'users', 'action' => 'index'),
+      'logoutRedirect' => array('controller' => 'users', 'action' => 'login'),
+      'authError' => 'email 又は パスワード を正しく入力してください。',
+      'authenticate' => array(
+        'Form' => array(
+          'fields' => array('username' => 'email')
+        ),
+      ),
+    ),
+  );
 }

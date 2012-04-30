@@ -1,3 +1,36 @@
+機能概要
+CakePHP2.1.1を元にしてOAuthによるユーザー登録機能を実装しています。
+http://cakephp.org/
+
+OAuth機能はHybridAuthプラグインを利用しています。
+http://hybridauth.sourceforge.net/index.html
+
+DBのマイグレーションはMigrationsプラグインを利用しています。
+https://github.com/CakeDC/Migrations
+
+機能
+・emailによるユーザー登録（アクティベーションなし）
+・OAuthによるユーザー登録　（Facebook）
+・ユーザー削除
+
+今後の予定
+・OAuth プロバイダにtwitterを追加
+・ログイン後にOAuthプロバイダの連携追加
+・ログイン後にOAuthプロバイダの連携解除
+・OAuthプロバイダへの何らかの通知・投稿
+
+インストール方法
+・apacheのdocumentrootに配置
+・app/Config/database.php を各自のDB環境に変更
+・./app/Console/cake Migrations.migration all を実行してテーブルを作成
+・facebook アプリを作成して、App ID,App Secretを app/Controller/UsersController.php に記述。又は、 app/Vendor/secret.php に記述。
+　アプリのドメインやサイトURLはdocumentrootに配置した設定値に合わせてください。
+
+author
+cybaron@gmail.com
+
+******
+
 CakePHP is a rapid development framework for PHP which uses commonly known design patterns like Active Record, Association Data Mapping, Front Controller and MVC. Our primary goal is to provide a structured framework that enables PHP users at all levels to rapidly develop robust web applications, without any loss to flexibility.
 
 The Cake Software Foundation - promoting development related to CakePHP

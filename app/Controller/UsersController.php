@@ -9,7 +9,11 @@ class UsersController extends AppController {
   }
 
   public function index() {
-    $this->set('user', $this->Auth->user());
+    $user = $this->Auth->user();
+    $this->Oauthuser->unbindModel(array('belongsTo' => array('User')));
+    $providers = $this->Oauthuser->findAllByUserId($user['id']);
+    $this->set('user', $user);
+    $this->set('providers', $providers);
   }
 
   public function hybridauth() {
@@ -148,5 +152,12 @@ class UsersController extends AppController {
     $this->User->delete($user_id);
 
     $this->logout();
+  }
+
+  public function disconnect($provider) {
+    $user = $this->Auth->user();
+    $this->Oauthuser->delete($user['id'], $provider);
+
+    $this->redirect($this->referer());
   }
 }

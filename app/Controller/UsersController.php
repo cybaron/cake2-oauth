@@ -38,6 +38,10 @@ class UsersController extends AppController {
             "keys"    => array ( "id" => "", "secret" => "" ),
             "scope"   => array("email", "user_birthday"),
           ),
+          "Twitter" => array (
+            "enabled" => true,
+            "keys"    => array ( "key" => "", "secret" => "" ),
+          ),
         ),
         "debug_mode" => false,
         "debug_file" => "",

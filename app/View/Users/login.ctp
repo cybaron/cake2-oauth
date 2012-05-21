@@ -18,5 +18,15 @@ echo $this->Html->link(
 </p>
 <p>
 <?php
+echo $this->Html->link(
+  $this->Html->image('login_tw.png', array('alt' => 'Login with Twitter')),
+  array('controller' => 'users', 'action' => 'login', 'twitter'),
+  array('escape' => false)
+);
+?>
+</p>
+<p>
+<?php
 echo $this->Html->link('Sign-up', array('action' => 'signup'));
 ?>
+</p>

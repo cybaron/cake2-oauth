@@ -8,12 +8,73 @@ class UsersController extends AppController {
     $this->Auth->allow('login', 'signup', 'hybridauth');
   }
 
+  private function getUserProfile($provider) {
+    $hybridauth_config = array(
+      "base_url" => "",
+      "providers" => array (
+        "Facebook" => array (
+          "enabled" => true,
+          "keys"    => array ( "id" => "", "secret" => "" ),
+          "scope"   => array("email", "user_birthday"),
+        ),
+        "Twitter" => array (
+          "enabled" => true,
+          "keys"    => array ( "key" => "", "secret" => "" ),
+        ),
+      ),
+      "debug_mode" => false,
+      "debug_file" => "",
+    );
+
+    // ここにapi-key,api-secret を記述してます。
+    if(is_file(APP . '/Vendor/secret.php')) include_once(APP . '/Vendor/secret.php');
+    require_once(APP . '/Vendor/Hybrid/Auth.php');
+    $hybridauth_config['base_url'] =
+      'http://'.$_SERVER['HTTP_HOST'].$this->base . "/users/hybridauth/";
+
+    try{
+      $hybridauth = new Hybrid_Auth($hybridauth_config);
+      $adapter = $hybridauth->authenticate($provider);
+      $user_profile = $adapter->getUserProfile();
+    } catch (Exception $e) {
+      switch( $e->getCode() ){
+      case 0 : $error = "Unspecified error."; break;
+      case 1 : $error = "Hybriauth configuration error."; break;
+      case 2 : $error = "Provider not properly configured."; break;
+      case 3 : $error = "Unknown or disabled provider."; break;
+      case 4 : $error = "Missing provider application credentials."; break;
+      case 5 : $error = "Authentification failed. The user has canceled the authentication or the provider refused the connection."; break;
+      case 6 : $error = "User profile request failed. Most likely the user is not connected to the provider and he should to authenticate again.";
+      $adapter->logout();
+      break;
+      case 7 : $error = "User not connected to the provider.";
+      $adapter->logout();
+      break;
+      }
+      // todo:エラーコードに応じたメッセージをログイン画面に表示させる。
+      $error .= "<br /><br /><b>Original error message:</b> " . $e->getMessage();
+      $error .= "<hr /><pre>Trace:<br />" . $e->getTraceAsString() . "</pre>";
+      $this->set('error', $error);
+    }
+    return $user_profile;
+  }
+
   public function index() {
     $user = $this->Auth->user();
     $this->Oauthuser->unbindModel(array('belongsTo' => array('User')));
     $providers = $this->Oauthuser->findAllByUserId($user['id']);
+
+    $targets = array('facebook', 'twitter');
+    $oauth = array();
+    foreach($providers as $provider) {
+      foreach($targets as $target) {
+        if(in_array($target, $provider['Oauthuser'])) {
+          $oauth[] = $target;
+        }
+      }
+    }
     $this->set('user', $user);
-    $this->set('providers', $providers);
+    $this->set('oauth', $oauth);
   }
 
   public function hybridauth() {
@@ -34,83 +95,41 @@ class UsersController extends AppController {
       }
     } else {
       // OAuth ログイン処理
-      $hybridauth_config = array(
-        "base_url" => "", 
-        "providers" => array ( 
-          "Facebook" => array ( 
-            "enabled" => true,
-            "keys"    => array ( "id" => "", "secret" => "" ),
-            "scope"   => array("email", "user_birthday"),
-          ),
-          "Twitter" => array (
-            "enabled" => true,
-            "keys"    => array ( "key" => "", "secret" => "" ),
-          ),
-        ),
-        "debug_mode" => false,
-        "debug_file" => "",
-      );
+      $user_profile = $this->getUserProfile($provider);
 
-      if(is_file(APP . '/Vendor/secret.php')) include_once(APP . '/Vendor/secret.php');  // ここにapi-key,api-secret を記述してます。
-      require_once(APP . '/Vendor/Hybrid/Auth.php');
-      $hybridauth_config['base_url'] = 'http://'.$_SERVER['HTTP_HOST'].$this->base . "/users/hybridauth/";
+      $oauthuser =
+        $this->Oauthuser->findByProviderAndProviderUid($provider, $user_profile->identifier);
+      $existing  = $this->User->findByEmail($user_profile->email);
 
-      try{
-        $hybridauth = new Hybrid_Auth($hybridauth_config);
-        $adapter = $hybridauth->authenticate($provider);
-        $user_profile = $adapter->getUserProfile();
+      if($existing && empty($oauthuser)) {
+        // provider->email で ユーザー登録されている場合は、そちらでログインしてもらう
+        // emailとoauthユーザーを重複してユーザー登録させないため。
+        $this->Session->setFlash("既にユーザー登録されています。"
+                                . " {$user_profile->email} でログインしてください。");
+        $this->redirect(array('controller' => 'users', 'action' => 'login'));
+      }
 
-        $oauthuser = $this->Oauthuser->findByProviderAndProviderUid($provider, $user_profile->identifier);
-        $existing  = $this->User->findByEmail($user_profile->email);
+      if(empty($oauthuser)) {
+        // 別provider認証の時に重複ユーザーとして作られるが、
+        // emailアドレスユニークでユーザーへ気づきとしている。
+        // ドットインストールでも同様の処理となっていた。
 
-        if($existing && empty($oauthuser)) {
-          // provider->email で ユーザー登録されている場合は、そちらでログインしてもらう
-          // emailとoauthユーザーを重複してユーザー登録させないため。
-          $this->Session->setFlash("既にユーザー登録されています。 {$user_profile->email} でログインしてください。");
-          $this->redirect(array('controller' => 'users', 'action' => 'login'));
-        }
-
-        if(empty($oauthuser)) {
-          // 別provider認証の時に重複ユーザーとして作られるが、emailアドレスユニークでユーザーへ気づきとしている。
-          // ドットインストールでも同様の処理となっていた。
-
-          // ユーザー情報を$usr_profileから引き継ぎ & 会員登録画面に遷移
-          $this->Session->setFlash('ユーザー登録します。情報を入力してください。');
-          $this->Session->write('provider', $provider);
-          $this->Session->write('provider_uid', $user_profile->identifier);
-          $this->request->data['User']['username'] = $user_profile->displayName;
-          $this->request->data['User']['email'] = $user_profile->email;
-          $this->render('signup');
+        // ユーザー情報を$usr_profileから引き継ぎ & 会員登録画面に遷移
+        $this->Session->setFlash('ユーザー登録します。情報を入力してください。');
+        $this->Session->write('provider', $provider);
+        $this->Session->write('provider_uid', $user_profile->identifier);
+        $this->request->data['User']['username'] = $user_profile->displayName;
+        $this->request->data['User']['email'] = $user_profile->email;
+        $this->render('signup');
+      } else {
+        $user = $oauthuser['User'];
+        if($user) {
+          // oauth で ユーザー登録済みなのでログイン認証OK
+          $this->Auth->login($user);
+          return $this->redirect($this->Auth->redirect());
         } else {
-          $user = $oauthuser['User'];
-          if($user) {
-            // oauth で ユーザー登録済みなのでログイン認証OK
-            $this->Auth->login($user);
-            return $this->redirect($this->Auth->redirect());
-          } else {
-            // oauthusers に存在して、usersに存在しない場合。なんらかのデータ不整合
-          }
+          // oauthusers に存在して、usersに存在しない場合。なんらかのデータ不整合
         }
-
-      } catch (Exception $e) {
-        switch( $e->getCode() ){ 
-          case 0 : $error = "Unspecified error."; break;
-          case 1 : $error = "Hybriauth configuration error."; break;
-          case 2 : $error = "Provider not properly configured."; break;
-          case 3 : $error = "Unknown or disabled provider."; break;
-          case 4 : $error = "Missing provider application credentials."; break;
-          case 5 : $error = "Authentification failed. The user has canceled the authentication or the provider refused the connection."; break;
-          case 6 : $error = "User profile request failed. Most likely the user is not connected to the provider and he should to authenticate again."; 
-            $adapter->logout(); 
-            break;
-          case 7 : $error = "User not connected to the provider."; 
-            $adapter->logout(); 
-          break;
-        }
-        // todo:エラーコードに応じたメッセージをログイン画面に表示させる。
-        $error .= "<br /><br /><b>Original error message:</b> " . $e->getMessage(); 
-        $error .= "<hr /><pre>Trace:<br />" . $e->getTraceAsString() . "</pre>";  
-        $this->set('error', $error);
       }
     }
   }
@@ -157,6 +176,18 @@ class UsersController extends AppController {
   public function disconnect($provider) {
     $user = $this->Auth->user();
     $this->Oauthuser->delete($user['id'], $provider);
+
+    $this->redirect($this->referer());
+  }
+
+  public function connect($provider) {
+    // ログイン済みで、oauthデータがなければ連携データ作成->redirect
+    $user_profile = $this->getUserProfile($provider);
+    $user = $this->Auth->user();
+    //debug($user);exit;
+    if (!empty($user_profile) && !empty($user)) {
+      $this->Oauthuser->add($user['id'], $provider, $user_profile->identifier);
+    }
 
     $this->redirect($this->referer());
   }

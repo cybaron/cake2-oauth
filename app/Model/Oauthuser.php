@@ -30,4 +30,11 @@ class Oauthuser extends AppModel {
 
     return $this->getLastInsertID();
   }
+
+  public function delete($user_id, $provider) {
+    $this->deleteAll(array(
+      'OAuthuser.user_id'  => $user_id,
+      'Oauthuser.provider' => $provider,
+    ));
+  }
 }
